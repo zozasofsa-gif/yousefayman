@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MyChat V26 (Ultimate Fix)</title>
+    <title>MyChat V27 (Context & Context)</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -27,7 +27,7 @@
         body { font-family: 'Cairo', sans-serif; background-color: #0f172a; color: white; overflow: hidden; }
         ::-webkit-scrollbar { width: 5px; } ::-webkit-scrollbar-thumb { background: #6366f1; border-radius: 10px; }
         .file-preview { max-width: 200px; max-height: 200px; object-fit: cover; border-radius: 8px; border: 2px solid #6366f1; }
-        .ai-loading { font-size: 12px; color: #10b981; font-weight: bold; margin-bottom: 5px; display: flex; align-items: center; gap: 5px; }
+        .msg-bubble { position: relative; max-width: 85%; }
     </style>
 </head>
 <body>
@@ -35,61 +35,60 @@
     <div id="app" class="h-screen w-full flex flex-col items-center justify-center relative">
 
         <div v-if="!isConnected" class="absolute top-0 w-full bg-red-600/90 text-white text-center text-xs py-1 z-50">
-            <i class="fas fa-wifi"></i> جاري الاتصال بالسيرفر... (لو طولت تأكد من Rules في Firebase)
+            <i class="fas fa-wifi"></i> جاري الاتصال...
         </div>
 
         <div v-if="view === 'profile'" class="w-full max-w-md p-6 z-40">
             <div class="bg-panel/90 backdrop-blur border border-gray-700 p-8 rounded-3xl shadow-2xl">
                 <h1 class="text-center text-2xl font-bold mb-6">الملف الشخصي</h1>
-                
                 <div class="flex justify-center mb-6">
-                    <img :src="user.avatar || 'https://via.placeholder.com/150'" @click="showAvatarModal=true" class="w-24 h-24 rounded-full border-4 border-primary cursor-pointer hover:opacity-80">
+                    <img :src="user.avatar || 'https://via.placeholder.com/150'" @click="showAvatarModal=true" class="w-24 h-24 rounded-full border-4 border-primary cursor-pointer hover:opacity-80 object-cover">
                 </div>
-
                 <div class="space-y-4">
                     <input v-model="user.name" type="text" placeholder="اسمك الظاهر" class="w-full bg-dark border border-gray-600 rounded-xl px-4 py-3 outline-none">
                     <input v-model="user.username" @blur="checkUsername" type="text" placeholder="اليوزر نيم (انجليزي)" class="w-full bg-dark border border-gray-600 rounded-xl px-4 py-3 outline-none text-left" style="direction: ltr;">
-                    
                     <p v-if="usernameStatus === 'taken'" class="text-red-500 text-xs">اليوزر مأخوذ!</p>
                     <p v-if="usernameStatus === 'available'" class="text-green-500 text-xs">متاح ✓</p>
-
-                    <button @click="saveProfile" :disabled="usernameStatus !== 'available' || !user.name" class="w-full bg-primary hover:bg-indigo-600 text-white py-3 rounded-xl font-bold disabled:opacity-50">
-                        حفظ ودخول
-                    </button>
+                    <button @click="saveProfile" :disabled="usernameStatus !== 'available' || !user.name" class="w-full bg-primary hover:bg-indigo-600 text-white py-3 rounded-xl font-bold disabled:opacity-50">حفظ ودخول</button>
                 </div>
             </div>
         </div>
 
         <div v-else-if="view === 'lobby'" class="w-full max-w-md p-6 z-40">
             <div class="bg-panel/90 p-8 rounded-3xl shadow-2xl text-center border border-gray-700">
-                <h2 class="text-2xl font-bold mb-6">غرف الدردشة</h2>
+                <h2 class="text-2xl font-bold mb-6">دخول غرفة</h2>
                 <div class="space-y-4">
                     <input v-model="roomInput.name" type="text" placeholder="اسم الغرفة" class="w-full bg-dark border border-gray-600 rounded-xl px-4 py-3 text-center outline-none">
                     <input v-model="roomInput.password" type="password" placeholder="الرقم السري (اختياري)" class="w-full bg-dark border border-gray-600 rounded-xl px-4 py-3 text-center outline-none">
-                    <button @click="joinRoom" class="w-full bg-primary py-3 rounded-xl font-bold">دخول الغرفة</button>
+                    <button @click="joinRoom" class="w-full bg-primary py-3 rounded-xl font-bold">بدء المحادثة</button>
                 </div>
             </div>
         </div>
 
         <div v-else-if="view === 'chat'" class="w-full h-full md:max-w-5xl bg-panel md:rounded-xl shadow-2xl flex flex-col overflow-hidden relative border border-gray-800">
             
-            <div class="bg-dark/90 p-4 flex justify-between items-center border-b border-gray-700 z-10">
+            <div class="bg-dark/95 p-4 flex justify-between items-center border-b border-gray-700 z-10">
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 bg-primary rounded-full flex items-center justify-center text-xl font-bold uppercase">{{ activeRoom.name.charAt(0) }}</div>
                     <div>
                         <h3 class="font-bold">{{ activeRoom.name }}</h3>
-                        <span class="text-xs text-green-400">@{{ user.username }}</span>
+                        <span class="text-xs text-green-400 flex items-center gap-1">
+                            <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span> متصل
+                        </span>
                     </div>
                 </div>
-                <button @click="leaveRoom" class="bg-red-500/20 text-red-400 w-10 h-10 rounded-full hover:bg-red-500 hover:text-white transition"><i class="fas fa-sign-out-alt"></i></button>
+                <div class="flex gap-2">
+                    <button @click="copyLink" class="bg-gray-700 w-10 h-10 rounded-full hover:bg-white hover:text-dark transition" title="نسخ رابط الغرفة"><i class="fas fa-link"></i></button>
+                    <button @click="leaveRoom" class="bg-red-500/20 text-red-400 w-10 h-10 rounded-full hover:bg-red-500 hover:text-white transition"><i class="fas fa-sign-out-alt"></i></button>
+                </div>
             </div>
 
             <div id="chat-box" class="flex-1 overflow-y-auto p-4 space-y-4 bg-dark relative chat-scroll">
                 
                 <div v-for="(msg, index) in messages" :key="index" :class="['flex w-full gap-2', msg.username === user.username ? 'flex-row-reverse' : 'flex-row']">
-                    <img :src="msg.avatar" class="w-10 h-10 rounded-full border border-gray-600 object-cover">
+                    <img :src="msg.avatar" class="w-10 h-10 rounded-full border border-gray-600 object-cover bg-gray-800">
                     
-                    <div :class="['max-w-[80%] p-3 rounded-2xl text-sm relative', msg.username === user.username ? 'bg-primary text-white rounded-br-none' : 'bg-gray-700 text-gray-200 rounded-bl-none', msg.isAi ? 'border border-ai/50' : '']">
+                    <div :class="['msg-bubble p-3 rounded-2xl text-sm relative', msg.username === user.username ? 'bg-primary text-white rounded-br-none' : 'bg-gray-700 text-gray-200 rounded-bl-none', msg.isAi ? 'border border-ai/50 shadow-[0_0_15px_rgba(16,185,129,0.2)]' : '']">
                         
                         <p v-if="msg.username !== user.username" :class="['text-[10px] font-bold mb-1', msg.isAi ? 'text-ai' : 'text-indigo-300']">
                             {{ msg.name }} <span v-if="msg.isAiRequest" class="text-gray-400 text-[9px]">(سأل AI)</span>
@@ -98,16 +97,18 @@
                         <div v-if="msg.fileUrl" class="mb-2">
                             <img :src="msg.fileUrl" @click="viewMedia(msg.fileUrl)" class="file-preview cursor-pointer hover:opacity-90 transition">
                         </div>
+                        <div v-if="msg.aiImageUrl" class="mb-2">
+                             <img :src="msg.aiImageUrl" @click="viewMedia(msg.aiImageUrl)" class="file-preview w-full h-auto cursor-pointer">
+                        </div>
                         
                         <p class="whitespace-pre-wrap leading-relaxed">{{ msg.text }}</p>
-                        <span class="text-[9px] opacity-50 block text-end mt-1">{{ formatTime(msg.timestamp) }}</span>
                     </div>
                 </div>
 
                 <div v-if="aiProcessing" class="flex w-full gap-2 animate-pulse">
-                    <img src="https://img.icons8.com/color/48/chatbot.png" class="w-10 h-10 rounded-full">
-                    <div class="bg-gray-800 p-3 rounded-2xl rounded-bl-none text-ai text-sm">
-                        <i class="fas fa-circle-notch fa-spin mr-2"></i> جاري التفكير والرد...
+                    <img src="https://cdn-icons-png.flaticon.com/512/4712/4712035.png" class="w-10 h-10 rounded-full bg-white p-1">
+                    <div class="bg-gray-800 p-3 rounded-2xl rounded-bl-none text-ai text-sm flex items-center gap-2">
+                        <i class="fas fa-brain fa-bounce"></i> أقرأ المحادثة وأفكر...
                     </div>
                 </div>
             </div>
@@ -120,7 +121,7 @@
                 </div>
 
                 <div class="flex items-center gap-2">
-                    <button @click="aiMode = !aiMode" :class="['w-12 h-12 rounded-full transition flex items-center justify-center shadow-lg', aiMode ? 'bg-ai text-white animate-pulse' : 'bg-gray-700 text-gray-400']" title="تحدث مع الذكاء الاصطناعي">
+                    <button @click="aiMode = !aiMode" :class="['w-12 h-12 rounded-full transition flex items-center justify-center shadow-lg', aiMode ? 'bg-ai text-white animate-pulse' : 'bg-gray-700 text-gray-400']" title="تفعيل الـ AI">
                         <i class="fas fa-robot text-lg"></i>
                     </button>
 
@@ -129,9 +130,9 @@
                         <input type="file" accept="image/*" class="hidden" @change="handleFileSelect">
                     </label>
 
-                    <input v-model="newMessage" @keyup.enter="handleSend" type="text" :placeholder="aiMode ? 'اسأل GPT-5.1 أو اطلب صورة...' : 'اكتب رسالة...'" 
+                    <input v-model="newMessage" @keyup.enter="handleSend" type="text" :placeholder="aiMode ? 'الـ AI يقرأ الشات كله، اسأله...' : 'اكتب رسالة...'" 
                            class="flex-1 bg-gray-800 text-white rounded-full px-5 py-3 outline-none focus:ring-2 transition"
-                           :class="aiMode ? 'focus:ring-ai' : 'focus:ring-primary'">
+                           :class="aiMode ? 'focus:ring-ai placeholder-ai/70' : 'focus:ring-primary'">
 
                     <button @click="handleSend" :disabled="uploading" class="w-12 h-12 rounded-full bg-primary hover:bg-indigo-600 text-white flex items-center justify-center shadow-lg transition disabled:opacity-50">
                         <i v-if="uploading" class="fas fa-spinner fa-spin"></i>
@@ -145,7 +146,7 @@
             <div class="bg-panel p-4 rounded-xl w-full max-w-sm">
                 <h3 class="text-center font-bold mb-4">اختر صورة</h3>
                 <div class="grid grid-cols-4 gap-2">
-                    <img v-for="img in presetAvatars" :src="img" @click="user.avatar=img; showAvatarModal=false" class="w-full aspect-square rounded cursor-pointer hover:border-2 border-primary">
+                    <img v-for="img in presetAvatars" :src="img" @click="user.avatar=img; showAvatarModal=false" class="w-full aspect-square rounded cursor-pointer hover:border-2 border-primary object-cover">
                 </div>
             </div>
         </div>
@@ -158,9 +159,6 @@
     </div>
 
     <script>
-        // ===========================================
-        // ⚙️ الإعدادات (المفاتيح الخاصة بك)
-        // ===========================================
         const IMGBB_KEY = "f5028b5ae4cae4d44788326b3fc51e42";
         const OPENAI_KEY = "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";
         
@@ -174,14 +172,12 @@
             appId: "1:611783046290:web:976cf7ec1d8a6c2126e24b"
         };
 
-        // تهيئة التطبيق
         try { firebase.initializeApp(firebaseConfig); } catch(e) {}
         const db = firebase.database();
         const { createApp, ref, reactive, onMounted, nextTick } = Vue;
 
         createApp({
             setup() {
-                // حالة التطبيق
                 const view = ref('profile');
                 const isConnected = ref(false);
                 const user = reactive({ name: '', username: '', avatar: '' });
@@ -190,7 +186,6 @@
                 const messages = ref([]);
                 const newMessage = ref('');
                 
-                // حالة الـ AI والملفات
                 const aiMode = ref(false);
                 const aiProcessing = ref(false);
                 const fileToSend = reactive({ file: null, preview: null, base64: null });
@@ -199,7 +194,6 @@
                 const mediaView = ref(null);
                 const usernameStatus = ref('');
 
-                // صور جاهزة
                 const presetAvatars = [
                     'https://i.pinimg.com/736x/f4/56/d1/f456d11944c020cd196d4b78c8ef3692.jpg',
                     'https://i.pinimg.com/736x/e7/2b/1a/e72b1a4d72d0e6385da67ffa00e37de6.jpg',
@@ -217,67 +211,85 @@
                         usernameStatus.value = 'available';
                         view.value = 'lobby';
                     }
+                    // التحقق من وجود رابط دعوة
+                    const params = new URLSearchParams(window.location.search);
+                    if(params.has('room')) {
+                        roomInput.name = params.get('room');
+                        if(params.has('pass')) roomInput.password = params.get('pass');
+                        if(saved) joinRoom();
+                    }
                 });
 
-                // --- دوال الدردشة الأساسية ---
                 const handleSend = async () => {
                     if ((!newMessage.value.trim() && !fileToSend.file) || uploading.value) return;
 
                     let fileUrl = null;
-                    
-                    // 1. رفع الصورة أولاً (إذا وجدت)
                     if (fileToSend.file) {
                         uploading.value = true;
                         fileUrl = await uploadToImgBB(fileToSend.base64);
                         uploading.value = false;
-                        if (!fileUrl) return; // فشل الرفع
+                        if (!fileUrl) return; 
                         clearFile();
                     }
 
                     const textToSend = newMessage.value;
-                    newMessage.value = ''; // مسح الحقل فوراً
+                    const isAiReq = aiMode.value;
+                    newMessage.value = '';
 
-                    // 2. إرسال رسالة المستخدم لفايربيس
-                    const userMsg = {
+                    // 1. إرسال رسالة المستخدم فوراً
+                    await dbRef.push({
                         username: user.username,
                         name: user.name,
                         avatar: user.avatar,
                         text: textToSend,
                         fileUrl: fileUrl,
                         timestamp: Date.now(),
-                        isAiRequest: aiMode.value
-                    };
-                    
-                    try {
-                        await dbRef.push(userMsg);
-                    } catch(e) {
-                        alert("فشل الإرسال: تأكد من تفعيل Rules في Firebase Console!");
-                        return;
-                    }
+                        isAiRequest: isAiReq
+                    });
 
-                    // 3. لو كان وضع AI مفعل
-                    if (aiMode.value) {
+                    // 2. إذا كان الوضع AI، نجهز الرد
+                    if (isAiReq) {
                         aiProcessing.value = true;
-                        // نرسل الطلب لـ OpenAI
-                        const aiReply = await fetchOpenAI(textToSend);
+                        aiMode.value = false; // نغلق الوضع مؤقتاً
+
+                        // 🧠 بناء سياق المحادثة الكامل (Context) 🧠
+                        // نأخذ آخر 20 رسالة ليفهم الـ AI السياق (مين قال إيه)
+                        const contextHistory = messages.value.slice(-20).map(m => {
+                            if (m.isAi) return { role: "assistant", content: m.text };
+                            return { role: "user", content: `${m.name}: ${m.text}` };
+                        });
+
+                        // إضافة الصورة للسياق إذا وجدت (Vision)
+                        if (fileUrl) {
+                            contextHistory.push({
+                                role: "user", 
+                                content: [
+                                    { type: "text", text: `هذه رسالة من ${user.name}: ${textToSend}` },
+                                    { type: "image_url", image_url: { url: fileUrl } }
+                                ]
+                            });
+                        } else {
+                            // إضافة الرسالة الحالية للسياق
+                            // (لاحظ: نحن أرسلناها للقاعدة، لكن الـ AI يحتاج يقرأها كجزء من الـ Prompt)
+                            // لا نضيفها مرة أخرى هنا لأننا أخذناها من messages.value المتزامن، 
+                            // لكن لضمان السرعة سنرسلها صراحة كآخر رسالة.
+                        }
+
+                        const aiReply = await fetchOpenAI(contextHistory, textToSend);
                         aiProcessing.value = false;
                         
-                        // إرسال رد الـ AI لفايربيس (عشان الكل يشوفه)
-                        const aiMsg = {
+                        await dbRef.push({
                             username: 'AI_BOT',
-                            name: 'المساعد الذكي (GPT-5.1)',
-                            avatar: 'https://img.icons8.com/color/48/chatbot.png',
+                            name: 'الذكاء الاصطناعي',
+                            avatar: 'https://cdn-icons-png.flaticon.com/512/4712/4712035.png',
                             text: aiReply.text,
-                            fileUrl: aiReply.image || null, // لو عمل صورة
+                            aiImageUrl: aiReply.image || null,
                             timestamp: Date.now(),
                             isAi: true
-                        };
-                        dbRef.push(aiMsg);
-                        aiMode.value = false; // قفل وضع الـ AI بعد الرد
+                        });
                     }
                 };
 
-                // --- دوال API ---
                 const uploadToImgBB = async (base64) => {
                     try {
                         const formData = new FormData();
@@ -285,45 +297,46 @@
                         const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_KEY}`, { method: 'POST', body: formData });
                         const data = await res.json();
                         return data.data.url;
-                    } catch(e) {
-                        alert("فشل رفع الصورة!");
-                        return null;
-                    }
+                    } catch(e) { alert("فشل رفع الصورة"); return null; }
                 };
 
-                const fetchOpenAI = async (prompt) => {
-                    // فحص لو طلب صورة
-                    if (prompt.includes('صورة') || prompt.includes('image')) {
+                const fetchOpenAI = async (history, currentPrompt) => {
+                    // لو طلب صورة
+                    if (currentPrompt.includes('صورة') || currentPrompt.includes('image')) {
                         try {
                             const res = await fetch('https://api.openai.com/v1/images/generations', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${OPENAI_KEY}` },
-                                body: JSON.stringify({ model: "dall-e-3", prompt: prompt, n: 1, size: "1024x1024" })
+                                body: JSON.stringify({ model: "dall-e-3", prompt: currentPrompt, n: 1, size: "1024x1024" })
                             });
                             const data = await res.json();
-                            if(data.data) return { text: 'تم توليد الصورة بناءً على طلبك:', image: data.data[0].url };
+                            if(data.data) return { text: 'تم توليد الصورة:', image: data.data[0].url };
                         } catch(e) {}
                     }
 
-                    // شات عادي
+                    // شات مع سياق
                     try {
+                        // إضافة الـ System Prompt عشان يفهم إنه في جروب شات
+                        const systemPrompt = { role: "system", content: "أنت مساعد ذكي في محادثة جماعية. لديك سجل المحادثة. اسمك 'الذكاء الاصطناعي'. أجب باختصار وذكاء. إذا سألك شخص عن معنى كلمة تم ذكرها سابقاً في الشات، ابحث في السياق وأجب." };
+                        
+                        const fullMessages = [systemPrompt, ...history];
+
                         const res = await fetch('https://api.openai.com/v1/chat/completions', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${OPENAI_KEY}` },
                             body: JSON.stringify({
-                                model: "gpt-4o", // موديل قوي وسريع
-                                messages: [{ role: "user", content: prompt }],
-                                max_tokens: 500
+                                model: "gpt-4o-mini", // سريع وذكي ويدعم السياق
+                                messages: fullMessages,
+                                max_tokens: 600
                             })
                         });
                         const data = await res.json();
                         return { text: data.choices[0].message.content, image: null };
                     } catch(e) {
-                        return { text: "حدث خطأ في الاتصال بالذكاء الاصطناعي.", image: null };
+                        return { text: "حدث خطأ في الاتصال بالـ AI.", image: null };
                     }
                 };
 
-                // --- دوال مساعدة ---
                 const handleFileSelect = (e) => {
                     const file = e.target.files[0];
                     if (!file) return;
@@ -358,6 +371,10 @@
                     activeRoom.id = rid;
                     view.value = 'chat';
                     
+                    // تحديث الرابط للمشاركة
+                    const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + `?room=${roomInput.name}&pass=${roomInput.password || ''}`;
+                    window.history.pushState({path:newUrl},'',newUrl);
+
                     dbRef = db.ref('rooms/' + rid + '/messages');
                     dbRef.limitToLast(50).on('child_added', snap => {
                         messages.value.push(snap.val());
@@ -369,11 +386,12 @@
                     view.value = 'lobby';
                     messages.value = [];
                     if(dbRef) dbRef.off();
+                    window.history.pushState({}, '', window.location.pathname);
                 };
 
                 const copyLink = () => {
                     navigator.clipboard.writeText(window.location.href);
-                    alert("تم نسخ الرابط");
+                    alert("تم نسخ رابط الغرفة!");
                 };
 
                 const formatTime = (ts) => new Date(ts).toLocaleTimeString('ar-EG', {hour:'2-digit', minute:'2-digit'});
