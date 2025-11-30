@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MyChat Platform V23 (Final Stable Build)</title>
+    <title>MyChat Platform V24 (Sync Fix)</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -28,20 +28,17 @@
         .file-preview { max-width: 200px; max-height: 200px; object-fit: contain; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
         .pointer-auto { user-select: auto; }
         .ai-image-generated { max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.4); margin-top: 8px; }
-        .loader-spin { border: 4px solid rgba(255, 255, 255, 0.3); border-top: 4px solid #6366f1; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
 
     <div id="app" class="h-screen w-full flex flex-col items-center justify-center relative">
 
-        <div v-if="!appLoaded" class="absolute inset-0 bg-dark flex flex-col items-center justify-center z-[70]">
-            <div class="loader-spin"></div>
-            <p class="mt-4 text-primary font-bold">جاري تحميل المحركات...</p>
+        <div v-if="!isConnected" class="absolute top-0 w-full bg-red-600/90 text-white text-center text-xs py-1 z-50">
+            <i class="fas fa-wifi"></i> جاري الاتصال بالسيرفر...
         </div>
 
-        <div v-if="view === 'profile' && appLoaded" class="w-full max-w-md p-6 z-40">
+        <div v-if="view === 'profile'" class="w-full max-w-md p-6 z-40">
             <div class="bg-panel/90 backdrop-blur border border-gray-700 p-8 rounded-3xl shadow-2xl">
                 <h1 class="text-center text-2xl font-bold mb-6 text-white">إعداد الملف الشخصي</h1>
 
@@ -72,7 +69,7 @@
             </div>
         </div>
 
-        <div v-else-if="view === 'lobby' && appLoaded" class="w-full max-w-md p-6 z-40">
+        <div v-else-if="view === 'lobby'" class="w-full max-w-md p-6 z-40">
             <div class="absolute top-4 right-4 flex items-center gap-2 bg-panel px-3 py-1 rounded-full border border-gray-700 cursor-pointer" @click="view = 'profile'">
                 <img :src="user.avatar" class="w-8 h-8 rounded-full object-cover">
                 <span class="text-sm font-bold">{{ user.name }}</span>
@@ -90,7 +87,7 @@
             </div>
         </div>
 
-        <div v-else-if="view === 'chat' && appLoaded" class="w-full h-full md:max-w-5xl bg-panel md:rounded-xl shadow-2xl flex flex-col overflow-hidden relative border border-gray-800">
+        <div v-else-if="view === 'chat'" class="w-full h-full md:max-w-5xl bg-panel md:rounded-xl shadow-2xl flex flex-col overflow-hidden relative border border-gray-800">
             <div class="bg-dark/90 p-4 flex justify-between items-center border-b border-gray-700 z-10">
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 bg-primary rounded-full flex items-center justify-center text-xl font-bold uppercase">{{ activeRoom.name.charAt(0) }}</div>
@@ -111,7 +108,7 @@
                 <div v-for="(msg, index) in messages" :key="index" :class="['flex w-full items-end gap-2', msg.username === user.username ? 'flex-row-reverse' : 'flex-row']">
                     <img :src="msg.avatar" class="w-8 h-8 rounded-full border border-gray-700 bg-gray-800 object-cover">
                     <div @click="viewMedia(msg.fileUrl || msg.aiImageUrl, msg.fileType || (msg.aiImageUrl ? 'image/png' : null))" :class="['max-w-[75%] p-3 rounded-2xl shadow-sm text-sm break-words', msg.username === user.username ? 'bg-primary text-white rounded-br-none' : 'bg-gray-700 text-gray-200 rounded-bl-none', (msg.fileUrl || msg.aiImageUrl) ? 'cursor-zoom-in' : '']">
-                        <p v-if="msg.username !== user.username" :class="['text-[10px] font-bold mb-0.5', msg.isAi ? 'text-ai' : 'text-indigo-300']">{{ msg.name }}</p>
+                        <p v-if="msg.username !== user.username" :class="['text-[10px] font-bold mb-0.5', msg.isAi ? 'text-ai' : 'text-indigo-300', msg.isAiRequest ? 'text-yellow-400' : '']">{{ msg.name }} <span v-if="msg.isAiRequest">(سأل AI)</span></p>
                         
                         <div v-if="msg.fileUrl" class="mb-2">
                             <img v-if="isImage(msg.fileType)" :src="msg.fileUrl" class="file-preview">
@@ -136,10 +133,10 @@
                     <span class="text-sm truncate">{{ fileToSend.file.name }}</span>
                     <span v-if="uploadingFile" class="text-xs text-primary"><i class="fas fa-spinner fa-spin"></i> جاري الرفع...</span>
                 </div>
-                <input v-model="newMessage" type="text" :placeholder="aiMode ? 'إسأل AI Model عن الصورة...' : 'اضف وصفاً للصورة (اختياري)...'" class="flex-1 bg-gray-800 text-white rounded-full px-5 py-3 outline-none focus:ring-2 focus:ring-primary transition pointer-auto">
+                <input v-model="newMessage" type="text" :placeholder="aiMode ? 'إسأل AI Model عن الصورة...' : 'اضف وصفاً للصورة (اختياري)...'" class="flex-1 bg-gray-800 text-white rounded-full px-5 py-3 outline-none focus:ring-2 focus:ring-primary transition pointer-auto" :class="{'border-2 border-ai': aiMode}">
                 <button @click="aiMode ? sendMessageOrAi() : sendFileMessage()" :disabled="uploadingFile" :class="['w-12 h-12 rounded-full shadow-lg transition', aiMode ? 'bg-ai hover:bg-green-600 text-white' : 'bg-primary hover:bg-indigo-600 text-white']">
-                    <i v-if="uploadingFile" class="fas fa-spinner fa-spin text-xs"></i>
-                    <i v-else class="fas fa-paper-plane rtl:rotate-180"></i>
+                    <i v-if="uploadingFile" class="fas fa-paper-plane text-xs"></i>
+                    <i v-else class="fas fa-arrow-up rtl:rotate-180"></i>
                 </button>
             </div>
             <div v-else-if="!isGuest" class="p-3 bg-dark border-t border-gray-700 flex items-center gap-2">
@@ -190,10 +187,8 @@
 
     <script>
         // =================================================================================================
-        // 🚨🚨🚨 تحذير أمني خطير! هذا المفتاح سري ويجب ألا يتم تضمينه أبداً في كود يُعرض للعامة 🚨🚨🚨
-        // *************************************************************************************************
-        // استخدامك لهذا الكود يتحمل مسؤولية أي فواتير أو سرقة للمفتاح.
-        // *************************************************************************************************
+        // 🚨🚨🚨 المفاتيح السرية (للاستخدام الشخصي فقط) 🚨🚨🚨
+        // =================================================================================================
         const IMGBB_API_KEY = "f5028b5ae4cae4d44788326b3fc51e42"; 
         const OPENAI_API_KEY = "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"; 
         
@@ -217,7 +212,7 @@
         // =================================================================
         const AI_AVATAR = 'https://img.icons8.com/color/48/000000/chatbot.png';
         const AI_NAME = 'مساعد GPT-5.1';
-        const GPT_MODEL = "gpt-4o-mini"; // تم التخفيض لهذا النموذج لضمان سرعة الاستجابة والاستقرار
+        const GPT_MODEL = "gpt-4o-mini"; 
         const VISION_MODEL = "gpt-4o"; 
         const DALL_E_MODEL = "dall-e-3"; 
 
@@ -278,7 +273,7 @@
             const userName = context.name || 'المستخدم'; 
 
             let messagesForGPT = [
-                { role: "system", content: `أنت مساعد ذكاء اصطناعي عربي متقدم (GPT-5.1) يعمل على منصة MyChat. اسم المستخدم الحالي الذي تتحدث معه هو: ${userName}. إذا طلب منك المستخدم أن تتذكر اسمه، يجب أن تطلب منه صراحة "تذكر اسمي هو: [الاسم]" حتى يتم حفظه في الذاكرة المحلية (Firebase). إذا طلب منك إنشاء صورة، يجب أن تبدأ الرد بـ "أنشئ صورة لـ:" أو "إنشاء صورة لـ:".` },
+                { role: "system", content: `أنت مساعد ذكاء اصطناعي عربي متقدم (GPT-4o-mini) يعمل على منصة MyChat. اسم المستخدم الحالي الذي تتحدث معه هو: ${userName}. إذا طلب منك المستخدم أن تتذكر اسمه، يجب أن تطلب منه صراحة "تذكر اسمي هو: [الاسم]" حتى يتم حفظه في الذاكرة المحلية (Firebase). إذا طلب منك إنشاء صورة، يجب أن تبدأ الرد بـ "أنشئ صورة لـ:" أو "إنشاء صورة لـ:".` },
             ];
 
             const recentMessages = messages.slice(-5).filter(msg => !msg.isAi).map(msg => ({
@@ -345,7 +340,7 @@
                 const aiMode = ref(false);
                 const mediaToView = ref(null);
                 const aiIsTyping = ref(false); 
-                const appLoaded = ref(false); // الحالة الجديدة للتحميل
+                const appLoaded = ref(false); 
 
                 
                 const user = reactive({ name: '', username: '', avatar: '' });
@@ -357,7 +352,7 @@
                 const messages = ref([]);
                 const newMessage = ref('');
                 
-                const fileToSend = reactive({ file: null, preview: '', type: '', base64: null });
+                const fileToSend = reactive({ file: null, preview: null, type: null, base64: null });
                 const uploadingFile = ref(false);
                 
                 let dbRef = null;
@@ -370,7 +365,6 @@
                 ];
 
                 onMounted(() => {
-                    // Start Firebase checks immediately
                     db.ref(".info/connected").on("value", s => isConnected.value = s.val());
 
                     const savedUser = localStorage.getItem('mychat_user_v11');
@@ -449,60 +443,57 @@
                     const hasFile = !!fileToSend.file;
                     const isAiRequest = aiMode.value;
 
-                    // 1. إرسال رسالة المستخدم للدردشة (أو تجهيزها للـ AI)
-                    const userMsg = newMessage.value;
-                    let fileBase64 = null;
-
-                    if (!isAiRequest && !hasFile) {
-                        // وضع الدردشة العادية (نص فقط)
-                        const msg = { username: user.username, name: user.name, avatar: user.avatar, text: userMsg, timestamp: Date.now() };
-                        dbRef.push(msg).catch(() => alert("فشل الإرسال!"));
-                        newMessage.value = '';
-                        return;
-                    }
-
-                    // 2. وضع الـ AI: رفع الصورة أولاً (إذا وجدت)
-                    if (isAiRequest && hasFile) {
-                        fileBase64 = fileToSend.base64;
-                    }
-                    
-                    // 3. عرض رسالة المستخدم في الشات أولاً
-                    messages.value.push({
-                        username: user.username, name: user.name, avatar: user.avatar, 
-                        text: userMsg, timestamp: Date.now(), 
-                        fileUrl: hasFile ? fileToSend.preview : null, // عرض المعاينة في الشات
-                        fileType: hasFile ? fileToSend.type : null,
-                        isAi: false
-                    });
-                    nextTick(() => document.getElementById('chat-box').scrollTo(0, 99999));
-                    
-                    // 4. معالجة الـ AI
+                    // 1. إذا كان طلب للـ AI
                     if (isAiRequest) {
+                        
+                        // 1.1. رفع الصورة لـ ImgBB أولاً إذا وجدت
+                        if (hasFile) {
+                            await sendFileMessage(true); // رفع الصورة أولاً
+                        }
+                        
                         aiIsTyping.value = true;
-
-                        const aiResult = await generateAIResponse(userMsg, user.username, messages.value, fileBase64);
+                        
+                        // 1.2. إرسال سؤال المستخدم إلى Firebase (مع إشعار AI)
+                        const userQuestionMsg = { 
+                            username: user.username, name: user.name, avatar: user.avatar, 
+                            text: newMessage.value, timestamp: Date.now(),
+                            isAiRequest: true, // إشعار بأن هذا سؤال للـ AI
+                            fileUrl: hasFile ? fileToSend.preview : null, // عرض المعاينة في الشات
+                            fileType: hasFile ? fileToSend.type : null,
+                        };
+                        dbRef.push(userQuestionMsg);
+                        
+                        // 1.3. استدعاء نموذج OpenAI (بمحتوى الصورة إذا وجدت)
+                        const fileBase64 = hasFile ? fileToSend.base64 : null;
+                        const aiResult = await generateAIResponse(newMessage.value, user.username, messages.value, fileBase64);
+                        
                         aiIsTyping.value = false;
 
-                        // إرسال رد الـ AI
-                        messages.value.push({
+                        // 1.4. إرسال رد الـ AI إلى Firebase (للمزامنة)
+                        const aiAnswerMsg = {
                             username: 'AI', name: AI_NAME, avatar: AI_AVATAR,
                             text: aiResult.text, timestamp: Date.now(), isAi: true,
-                            aiImageUrl: aiResult.imageUrl 
-                        });
-                        nextTick(() => document.getElementById('chat-box').scrollTo(0, 99999));
+                            aiImageUrl: aiResult.imageUrl
+                        };
+                        dbRef.push(aiAnswerMsg);
 
-                        aiMode.value = false; // إيقاف وضع الـ AI تلقائيًا
-
+                        // 1.5. التنظيف
+                        aiMode.value = false;
                         if (hasFile) clearFileToSend();
                         newMessage.value = '';
                         return;
                     }
 
-                    // 5. وضع الرفع العادي (ImgBB)
+                    // 2. وضع الدردشة العادية
                     if (hasFile && !isAiRequest) {
-                        await sendFileMessage();
+                        await sendFileMessage(false); // رفع الصورة وإرسالها كرسالة عادية
                         return;
                     }
+
+                    // وضع الدردشة العادية (نص فقط)
+                    const msg = { username: user.username, name: user.name, avatar: user.avatar, text: newMessage.value, timestamp: Date.now() };
+                    dbRef.push(msg).catch(() => alert("فشل الإرسال!"));
+                    newMessage.value = '';
                 };
 
                 // [الرفع المباشر على ImgBB]
@@ -526,7 +517,7 @@
                     reader.readAsDataURL(file);
                 };
 
-                const sendFileMessage = async () => {
+                const sendFileMessage = async (isForAI = false) => {
                     if (!fileToSend.file || isGuest.value) return;
                     uploadingFile.value = true;
                     
@@ -545,20 +536,31 @@
 
                         if (result.success) {
                             const fileUrl = result.data.url;
-                            const msg = {
-                                username: user.username, name: user.name, avatar: user.avatar,
-                                text: newMessage.value, timestamp: Date.now(), fileUrl: fileUrl, fileType: fileToSend.type
-                            };
-                            dbRef.push(msg).catch(() => alert("فشل الإرسال!"));
+                            
+                            // ❗ إذا كانت للإرسال العادي، نرسلها مباشرة هنا ❗
+                            if (!isForAI) {
+                                const msg = {
+                                    username: user.username, name: user.name, avatar: user.avatar,
+                                    text: newMessage.value, timestamp: Date.now(), fileUrl: fileUrl, fileType: fileToSend.type
+                                };
+                                dbRef.push(msg).catch(() => alert("فشل الإرسال!"));
+                                clearFileToSend();
+                            }
+                            
+                            // إرجاع الرابط للذكاء الاصطناعي لاستخدامه في الـ Vision
+                            return fileUrl; 
                         } else {
-                            alert("فشل رفع الملف: الخدمة المجانية رفضت الملف (قد يكون فيديو أو حجم كبير).");
+                            alert("فشل رفع الملف: الخدمة المجانية رفضت الملف.");
+                            return null;
                         }
                     } catch (e) {
                         alert("خطأ في الاتصال الخارجي. تأكد من مفتاح ImgBB!");
+                        return null;
+                    } finally {
+                        if (!isForAI) { // لا تغلق التحميل إذا كان الطلب للـ AI
+                            uploadingFile.value = false;
+                        }
                     }
-                    
-                    clearFileToSend();
-                    uploadingFile.value = false;
                 };
 
                 const viewMedia = (url, type) => {
