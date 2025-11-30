@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MyChat Platform V25 (Final Feature Set)</title>
+    <title>MyChat Platform V24 (Sync Fix)</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -41,6 +41,7 @@
         <div v-if="view === 'profile'" class="w-full max-w-md p-6 z-40">
             <div class="bg-panel/90 backdrop-blur border border-gray-700 p-8 rounded-3xl shadow-2xl">
                 <h1 class="text-center text-2xl font-bold mb-6 text-white">إعداد الملف الشخصي</h1>
+
                 <div class="flex flex-col items-center mb-6">
                     <div class="relative group cursor-pointer" @click="showAvatarModal = true">
                         <img :src="user.avatar || 'https://via.placeholder.com/150/6366f1/ffffff?text=Add+Pic'" class="w-28 h-28 rounded-full border-4 border-primary object-cover">
@@ -50,14 +51,17 @@
                     </div>
                     <p class="text-xs text-gray-400 mt-2">اضغط لتغيير الصورة</p>
                 </div>
+
                 <div class="space-y-4">
                     <input v-model="user.name" type="text" placeholder="اسمك الظاهر" class="w-full bg-dark border border-gray-600 rounded-xl px-4 py-3 outline-none focus:border-primary pointer-auto">
+                    
                     <div>
                         <input v-model="user.username" @blur="checkUsername" type="text" placeholder="username (انجليزي)" class="w-full bg-dark border border-gray-600 rounded-xl px-4 py-3 outline-none focus:border-primary text-left dir-ltr pointer-auto">
                         <p v-if="usernameStatus === 'checking'" class="text-xs text-yellow-400 mt-1"><i class="fas fa-spinner fa-spin"></i> جاري التحقق من التوفر...</p>
                         <p v-if="usernameStatus === 'taken'" class="text-xs text-red-400 mt-1">مأخوذ! جرب: <span @click="user.username = suggestedUser" class="text-blue-400 cursor-pointer">{{ suggestedUser }}</span></p>
                         <p v-if="usernameStatus === 'available'" class="text-xs text-green-400 mt-1"><i class="fas fa-check"></i> متاح</p>
                     </div>
+
                     <button @click="saveProfile" :class="['w-full py-3 rounded-xl font-bold transition mt-4', (user.name && usernameStatus === 'available' && user.avatar) ? 'bg-primary hover:bg-indigo-600 text-white' : 'bg-gray-700 text-gray-500 disabled']">
                         حفظ ومتابعة <i class="fas fa-arrow-left"></i>
                     </button>
@@ -101,42 +105,23 @@
             </div>
 
             <div id="chat-box" class="flex-1 overflow-y-auto p-4 space-y-3 bg-dark relative chat-scroll">
-                <template v-for="(msg, index) in messages" :key="index">
-                    <div v-if="showDateSeparator(index, msg.timestamp)" class="flex justify-center my-4 sticky top-0 z-10">
-                        <span class="bg-gray-700 text-gray-300 text-xs px-3 py-1 rounded-full shadow-lg">
-                            {{ getDateLabel(msg.timestamp) }}
-                        </span>
-                    </div>
-
-                    <div :class="['flex w-full items-end gap-2', msg.username === user.username ? 'flex-row-reverse' : 'flex-row']">
-                        <img :src="msg.avatar" class="w-8 h-8 rounded-full border border-gray-700 bg-gray-800 object-cover">
-                        <div @click="viewMedia(msg.fileUrl || msg.aiImageUrl, msg.fileType || (msg.aiImageUrl ? 'image/png' : null))" :class="['max-w-[75%] p-3 rounded-2xl shadow-sm text-sm break-words', msg.username === user.username ? 'bg-primary text-white rounded-br-none' : 'bg-gray-700 text-gray-200 rounded-bl-none', (msg.fileUrl || msg.aiImageUrl) ? 'cursor-zoom-in' : '']">
-                            
-                            <p v-if="msg.username !== user.username" :class="['text-[10px] font-bold mb-0.5', msg.isAi ? 'text-ai' : 'text-indigo-300', msg.isAiRequest ? 'text-yellow-400' : '']">
-                                {{ msg.name }} <span v-if="msg.isAiRequest">(سأل AI)</span>
-                            </p>
-                            
-                            <div v-if="msg.fileUrl" class="mb-2">
-                                <img v-if="isImage(msg.fileType)" :src="msg.fileUrl" class="file-preview">
-                                <a v-else :href="msg.fileUrl" target="_blank" class="text-blue-400 underline flex items-center gap-1">
-                                    <i class="fas fa-file-image"></i> ملف مرفق (اضغط للتكبير)
-                                </a>
-                            </div>
-                            <div v-if="msg.aiImageUrl" class="mb-2">
-                                 <img :src="msg.aiImageUrl" class="ai-image-generated">
-                            </div>
-
-                            <p :class="{'font-mono text-sm': msg.isAi}">{{ msg.text }}</p>
-                            
-                            <div class="flex justify-end items-center gap-2 mt-1">
-                                <span class="text-[9px] opacity-70">{{ formatTime(msg.timestamp) }}</span>
-                                <button v-if="msg.username === user.username && !msg.isAi" @click="deleteMessage(msg.id)" class="text-red-400 hover:text-red-300 text-xs transition" title="حذف الرسالة">
-                                    <i class="fas fa-trash-alt"></i>
-                                </button>
-                            </div>
+                <div v-for="(msg, index) in messages" :key="index" :class="['flex w-full items-end gap-2', msg.username === user.username ? 'flex-row-reverse' : 'flex-row']">
+                    <img :src="msg.avatar" class="w-8 h-8 rounded-full border border-gray-700 bg-gray-800 object-cover">
+                    <div @click="viewMedia(msg.fileUrl || msg.aiImageUrl, msg.fileType || (msg.aiImageUrl ? 'image/png' : null))" :class="['max-w-[75%] p-3 rounded-2xl shadow-sm text-sm break-words', msg.username === user.username ? 'bg-primary text-white rounded-br-none' : 'bg-gray-700 text-gray-200 rounded-bl-none', (msg.fileUrl || msg.aiImageUrl) ? 'cursor-zoom-in' : '']">
+                        <p v-if="msg.username !== user.username" :class="['text-[10px] font-bold mb-0.5', msg.isAi ? 'text-ai' : 'text-indigo-300', msg.isAiRequest ? 'text-yellow-400' : '']">{{ msg.name }} <span v-if="msg.isAiRequest">(سأل AI)</span></p>
+                        
+                        <div v-if="msg.fileUrl" class="mb-2">
+                            <img v-if="isImage(msg.fileType)" :src="msg.fileUrl" class="file-preview">
+                            <a v-else :href="msg.fileUrl" target="_blank" class="text-blue-400 underline flex items-center gap-1">
+                                <i class="fas fa-file-image"></i> ملف مرفق (اضغط للتكبير)
+                            </a>
                         </div>
+                        <div v-if="msg.aiImageUrl" class="mb-2">
+                             <img :src="msg.aiImageUrl" class="ai-image-generated">
+                        </div>
+                        <p :class="{'font-mono text-sm': msg.isAi}">{{ msg.text }}</p>
                     </div>
-                </template>
+                </div>
             </div>
 
             <div v-if="fileToSend.file" class="p-3 bg-gray-900 border-t border-gray-700 flex items-center gap-3">
@@ -150,7 +135,7 @@
                 </div>
                 <input v-model="newMessage" type="text" :placeholder="aiMode ? 'إسأل AI Model عن الصورة...' : 'اضف وصفاً للصورة (اختياري)...'" class="flex-1 bg-gray-800 text-white rounded-full px-5 py-3 outline-none focus:ring-2 focus:ring-primary transition pointer-auto" :class="{'border-2 border-ai': aiMode}">
                 <button @click="aiMode ? sendMessageOrAi() : sendFileMessage()" :disabled="uploadingFile" :class="['w-12 h-12 rounded-full shadow-lg transition', aiMode ? 'bg-ai hover:bg-green-600 text-white' : 'bg-primary hover:bg-indigo-600 text-white']">
-                    <i v-if="uploadingFile" class="fas fa-spinner fa-spin text-xs"></i>
+                    <i v-if="uploadingFile" class="fas fa-paper-plane text-xs"></i>
                     <i v-else class="fas fa-arrow-up rtl:rotate-180"></i>
                 </button>
             </div>
@@ -288,7 +273,7 @@
             const userName = context.name || 'المستخدم'; 
 
             let messagesForGPT = [
-                { role: "system", content: `أنت مساعد ذكاء اصطناعي عربي متقدم (GPT-5.1) يعمل على منصة MyChat. اسم المستخدم الحالي الذي تتحدث معه هو: ${userName}. إذا طلب منك المستخدم أن تتذكر اسمه، يجب أن تطلب منه صراحة "تذكر اسمي هو: [الاسم]" حتى يتم حفظه في الذاكرة المحلية (Firebase). إذا طلب منك إنشاء صورة، يجب أن تبدأ الرد بـ "أنشئ صورة لـ:" أو "إنشاء صورة لـ:".` },
+                { role: "system", content: `أنت مساعد ذكاء اصطناعي عربي متقدم (GPT-4o-mini) يعمل على منصة MyChat. اسم المستخدم الحالي الذي تتحدث معه هو: ${userName}. إذا طلب منك المستخدم أن تتذكر اسمه، يجب أن تطلب منه صراحة "تذكر اسمي هو: [الاسم]" حتى يتم حفظه في الذاكرة المحلية (Firebase). إذا طلب منك إنشاء صورة، يجب أن تبدأ الرد بـ "أنشئ صورة لـ:" أو "إنشاء صورة لـ:".` },
             ];
 
             const recentMessages = messages.slice(-5).filter(msg => !msg.isAi).map(msg => ({
@@ -447,10 +432,7 @@
                     dbRef = db.ref('rooms/' + roomId + '/messages');
                     messages.value = [];
                     dbRef.limitToLast(50).on('child_added', (snap) => {
-                        // تخزين المفتاح ID للرسالة للسماح بحذفها
-                        const msg = snap.val();
-                        msg.id = snap.key; 
-                        messages.value.push(msg);
+                        messages.value.push(snap.val());
                         nextTick(() => document.getElementById('chat-box').scrollTo(0, 99999));
                     });
                 };
@@ -464,25 +446,27 @@
                     // 1. إذا كان طلب للـ AI
                     if (isAiRequest) {
                         
-                        // 1.1. رفع الصورة لـ ImgBB أولاً إذا وجدت (للرؤية)
-                        let fileBase64 = null;
+                        // 1.1. رفع الصورة لـ ImgBB أولاً إذا وجدت
                         if (hasFile) {
-                            fileBase64 = fileToSend.base64; // Base64 جاهز للاستخدام
+                            await sendFileMessage(true); // رفع الصورة أولاً
                         }
+                        
+                        aiIsTyping.value = true;
                         
                         // 1.2. إرسال سؤال المستخدم إلى Firebase (مع إشعار AI)
                         const userQuestionMsg = { 
                             username: user.username, name: user.name, avatar: user.avatar, 
                             text: newMessage.value, timestamp: Date.now(),
-                            isAiRequest: true, 
-                            fileUrl: hasFile ? fileToSend.preview : null, 
+                            isAiRequest: true, // إشعار بأن هذا سؤال للـ AI
+                            fileUrl: hasFile ? fileToSend.preview : null, // عرض المعاينة في الشات
                             fileType: hasFile ? fileToSend.type : null,
                         };
                         dbRef.push(userQuestionMsg);
                         
-                        // 1.3. بدء عملية الـ AI
-                        aiIsTyping.value = true;
+                        // 1.3. استدعاء نموذج OpenAI (بمحتوى الصورة إذا وجدت)
+                        const fileBase64 = hasFile ? fileToSend.base64 : null;
                         const aiResult = await generateAIResponse(newMessage.value, user.username, messages.value, fileBase64);
+                        
                         aiIsTyping.value = false;
 
                         // 1.4. إرسال رد الـ AI إلى Firebase (للمزامنة)
@@ -502,12 +486,12 @@
 
                     // 2. وضع الدردشة العادية
                     if (hasFile && !isAiRequest) {
-                        await sendFileMessage();
+                        await sendFileMessage(false); // رفع الصورة وإرسالها كرسالة عادية
                         return;
                     }
 
                     // وضع الدردشة العادية (نص فقط)
-                    const msg = { username: user.username, name: user.name, avatar: user.avatar, text: newMessage.value, timestamp: Date.Now() };
+                    const msg = { username: user.username, name: user.name, avatar: user.avatar, text: newMessage.value, timestamp: Date.now() };
                     dbRef.push(msg).catch(() => alert("فشل الإرسال!"));
                     newMessage.value = '';
                 };
@@ -528,12 +512,12 @@
                     const reader = new FileReader();
                     reader.onload = (e) => { 
                         fileToSend.preview = e.target.result;
-                        fileToSend.base64 = e.target.result; 
+                        fileToSend.base64 = e.target.result; // حفظ Base64 للـ AI 
                     };
                     reader.readAsDataURL(file);
                 };
 
-                const sendFileMessage = async () => {
+                const sendFileMessage = async (isForAI = false) => {
                     if (!fileToSend.file || isGuest.value) return;
                     uploadingFile.value = true;
                     
@@ -552,31 +536,31 @@
 
                         if (result.success) {
                             const fileUrl = result.data.url;
-                            const msg = {
-                                username: user.username, name: user.name, avatar: user.avatar,
-                                text: newMessage.value, timestamp: Date.now(), fileUrl: fileUrl, fileType: fileToSend.type
-                            };
-                            dbRef.push(msg).catch(() => alert("فشل الإرسال!"));
+                            
+                            // ❗ إذا كانت للإرسال العادي، نرسلها مباشرة هنا ❗
+                            if (!isForAI) {
+                                const msg = {
+                                    username: user.username, name: user.name, avatar: user.avatar,
+                                    text: newMessage.value, timestamp: Date.now(), fileUrl: fileUrl, fileType: fileToSend.type
+                                };
+                                dbRef.push(msg).catch(() => alert("فشل الإرسال!"));
+                                clearFileToSend();
+                            }
+                            
+                            // إرجاع الرابط للذكاء الاصطناعي لاستخدامه في الـ Vision
+                            return fileUrl; 
                         } else {
-                            alert("فشل رفع الملف: الخدمة المجانية رفضت الملف (قد يكون فيديو أو حجم كبير).");
+                            alert("فشل رفع الملف: الخدمة المجانية رفضت الملف.");
+                            return null;
                         }
                     } catch (e) {
                         alert("خطأ في الاتصال الخارجي. تأكد من مفتاح ImgBB!");
+                        return null;
                     } finally {
-                        clearFileToSend();
-                        uploadingFile.value = false;
+                        if (!isForAI) { // لا تغلق التحميل إذا كان الطلب للـ AI
+                            uploadingFile.value = false;
+                        }
                     }
-                };
-
-                const deleteMessage = (messageId) => {
-                    if (confirm('هل أنت متأكد من حذف هذه الرسالة؟')) {
-                         if (dbRef) {
-                             dbRef.child(messageId).remove().catch(error => {
-                                 alert("فشل الحذف! تأكد من صلاحيات Firebase.");
-                                 console.error("Delete Error:", error);
-                             });
-                         }
-                     }
                 };
 
                 const viewMedia = (url, type) => {
@@ -592,10 +576,10 @@
                     fileToSend.base64 = null;
                     newMessage.value = '';
                 };
-                
-                // دوال المساعدة لـ VUE
+
                 const isImage = (type) => type && type.startsWith('image/');
                 const isVideo = (type) => type && type.startsWith('video/');
+
                 const selectAvatar = (url) => { user.avatar = url; showAvatarModal.value = false; };
                 const handleFileUpload = (e) => {
                     const f = e.target.files[0];
@@ -603,25 +587,6 @@
                     const r = new FileReader();
                     r.onload = (res) => user.avatar = res.target.result;
                     r.readAsDataURL(f);
-                };
-
-                const formatTime = (ts) => new Date(ts).toLocaleTimeString('ar-EG', {hour:'2-digit', minute:'2-digit'});
-                const showDateSeparator = (index, currentTimestamp) => {
-                    if (index === 0) return true;
-                    const prevDate = new Date(messages.value[index - 1].timestamp).toDateString();
-                    const currentDate = new Date(currentTimestamp).toDateString();
-                    return prevDate !== currentDate;
-                };
-
-                const getDateLabel = (ts) => {
-                    const date = new Date(ts);
-                    const today = new Date();
-                    const yesterday = new Date(today);
-                    yesterday.setDate(today.getDate() - 1);
-
-                    if (date.toDateString() === today.toDateString()) return 'اليوم';
-                    if (date.toDateString() === yesterday.toDateString()) return 'الأمس';
-                    return date.toLocaleDateString('ar-EG');
                 };
 
                 const copyLink = () => {
@@ -642,8 +607,7 @@
                     usernameStatus, suggestedUser, messages, newMessage, showAvatarModal, presetAvatars,
                     fileToSend, uploadingFile, aiIsTyping,
                     checkUsername, saveProfile, joinRoom, sendMessageOrAi, copyLink, leaveRoom, handleFileUpload,
-                    selectAvatar, prepareFileToSend, sendFileMessage, clearFileToSend, isImage, isVideo, viewMedia,
-                    deleteMessage, formatTime, showDateSeparator, getDateLabel
+                    selectAvatar, prepareFileToSend, sendFileMessage, clearFileToSend, isImage, isVideo, viewMedia
                 };
             }
         }).mount('#app');
