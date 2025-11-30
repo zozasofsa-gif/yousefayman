@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>MyChat Platform V23 (Final Stable Build)</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: { primary: '#6366f1', dark: '#0f172a', panel: '#1e293b', ai: '#10b981' },
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
+        body { font-family: 'Cairo', sans-serif; background-color: #0f172a; color: white; overflow-hidden; user-select: none; }
+        ::-webkit-scrollbar { width: 5px; } ::-webkit-scrollbar-thumb { background: #6366f1; border-radius: 10px; }
+        .file-preview { max-width: 200px; max-height: 200px; object-fit: contain; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+        .pointer-auto { user-select: auto; }
+        .ai-image-generated { max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.4); margin-top: 8px; }
+        .loader-spin { border: 4px solid rgba(255, 255, 255, 0.3); border-top: 4px solid #6366f1; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+    <div id="app" class="h-screen w-full flex flex-col items-center justify-center relative">
+
+        <div v-if="!appLoaded" class="absolute inset-0 bg-dark flex flex-col items-center justify-center z-[70]">
+            <div class="loader-spin"></div>
+            <p class="mt-4 text-primary font-bold">جاري تحميل المحركات...</p>
+        </div>
+
+        <div v-if="view === 'profile' && appLoaded" class="w-full max-w-md p-6 z-40">
+            <div class="bg-panel/90 backdrop-blur border border-gray-700 p-8 rounded-3xl shadow-2xl">
+                <h1 class="text-center text-2xl font-bold mb-6 text-white">إعداد الملف الشخصي</h1>
+
+                <div class="flex flex-col items-center mb-6">
+                    <div class="relative group cursor-pointer" @click="showAvatarModal = true">
+                        <img :src="user.avatar || 'https://via.placeholder.com/150/6366f1/ffffff?text=Add+Pic'" class="w-28 h-28 rounded-full border-4 border-primary object-cover">
+                        <div class="absolute bottom-0 right-0 bg-primary w-8 h-8 rounded-full flex items-center justify-center border-2 border-dark">
+                            <i class="fas fa-camera text-xs"></i>
+                        </div>
+                    </div>
+                    <p class="text-xs text-gray-400 mt-2">اضغط لتغيير الصورة</p>
+                </div>
+
+                <div class="space-y-4">
+                    <input v-model="user.name" type="text" placeholder="اسمك الظاهر" class="w-full bg-dark border border-gray-600 rounded-xl px-4 py-3 outline-none focus:border-primary pointer-auto">
+                    
+                    <div>
+                        <input v-model="user.username" @blur="checkUsername" type="text" placeholder="username (انجليزي)" class="w-full bg-dark border border-gray-600 rounded-xl px-4 py-3 outline-none focus:border-primary text-left dir-ltr pointer-auto">
+                        <p v-if="usernameStatus === 'checking'" class="text-xs text-yellow-400 mt-1"><i class="fas fa-spinner fa-spin"></i> جاري التحقق من التوفر...</p>
+                        <p v-if="usernameStatus === 'taken'" class="text-xs text-red-400 mt-1">مأخوذ! جرب: <span @click="user.username = suggestedUser" class="text-blue-400 cursor-pointer">{{ suggestedUser }}</span></p>
+                        <p v-if="usernameStatus === 'available'" class="text-xs text-green-400 mt-1"><i class="fas fa-check"></i> متاح</p>
+                    </div>
+
+                    <button @click="saveProfile" :class="['w-full py-3 rounded-xl font-bold transition mt-4', (user.name && usernameStatus === 'available' && user.avatar) ? 'bg-primary hover:bg-indigo-600 text-white' : 'bg-gray-700 text-gray-500 disabled']">
+                        حفظ ومتابعة <i class="fas fa-arrow-left"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div v-else-if="view === 'lobby' && appLoaded" class="w-full max-w-md p-6 z-40">
+            <div class="absolute top-4 right-4 flex items-center gap-2 bg-panel px-3 py-1 rounded-full border border-gray-700 cursor-pointer" @click="view = 'profile'">
+                <img :src="user.avatar" class="w-8 h-8 rounded-full object-cover">
+                <span class="text-sm font-bold">{{ user.name }}</span>
+            </div>
+
+            <div class="bg-panel/90 backdrop-blur border border-gray-700 p-8 rounded-3xl shadow-2xl text-center">
+                <i class="fas fa-users text-5xl text-primary mb-4"></i>
+                <h2 class="text-2xl font-bold mb-6">انضم لمجتمع</h2>
+
+                <div class="space-y-4">
+                    <input v-model="roomInput.name" type="text" placeholder="اسم الروم (Room Name)" class="w-full bg-dark border border-gray-600 rounded-xl px-4 py-3 outline-none focus:border-primary text-center pointer-auto">
+                    <input v-model="roomInput.password" type="password" placeholder="كلمة السر (اختياري)" class="w-full bg-dark border border-gray-600 rounded-xl px-4 py-3 outline-none focus:border-primary text-center pointer-auto">
+                    <button @click="joinRoom" class="w-full bg-primary hover:bg-indigo-600 text-white py-3 rounded-xl font-bold transition">دخول</button>
+                </div>
+            </div>
+        </div>
+
+        <div v-else-if="view === 'chat' && appLoaded" class="w-full h-full md:max-w-5xl bg-panel md:rounded-xl shadow-2xl flex flex-col overflow-hidden relative border border-gray-800">
+            <div class="bg-dark/90 p-4 flex justify-between items-center border-b border-gray-700 z-10">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-primary rounded-full flex items-center justify-center text-xl font-bold uppercase">{{ activeRoom.name.charAt(0) }}</div>
+                    <div>
+                        <h3 class="font-bold">{{ activeRoom.name }}</h3>
+                        <span v-if="isGuest" class="text-xs text-yellow-400">وضع الزائر</span>
+                        <span v-else class="text-xs text-green-400">@{{ user.username }}</span>
+                        <span v-if="aiIsTyping" class="text-xs text-ai block"><i class="fas fa-robot fa-spin"></i> الذكاء الاصطناعي يكتب...</span>
+                    </div>
+                </div>
+                <div class="flex gap-2">
+                    <button @click="copyLink" class="bg-gray-700 w-10 h-10 rounded-full flex items-center justify-center hover:text-white transition" title="نسخ الرابط"><i class="fas fa-share-alt"></i></button>
+                    <button @click="leaveRoom" class="bg-red-500/10 text-red-400 w-10 h-10 rounded-full flex items-center justify-center hover:bg-red-500 hover:text-white transition"><i class="fas fa-sign-out-alt"></i></button>
+                </div>
+            </div>
+
+            <div id="chat-box" class="flex-1 overflow-y-auto p-4 space-y-3 bg-dark relative chat-scroll">
+                <div v-for="(msg, index) in messages" :key="index" :class="['flex w-full items-end gap-2', msg.username === user.username ? 'flex-row-reverse' : 'flex-row']">
+                    <img :src="msg.avatar" class="w-8 h-8 rounded-full border border-gray-700 bg-gray-800 object-cover">
+                    <div @click="viewMedia(msg.fileUrl || msg.aiImageUrl, msg.fileType || (msg.aiImageUrl ? 'image/png' : null))" :class="['max-w-[75%] p-3 rounded-2xl shadow-sm text-sm break-words', msg.username === user.username ? 'bg-primary text-white rounded-br-none' : 'bg-gray-700 text-gray-200 rounded-bl-none', (msg.fileUrl || msg.aiImageUrl) ? 'cursor-zoom-in' : '']">
+                        <p v-if="msg.username !== user.username" :class="['text-[10px] font-bold mb-0.5', msg.isAi ? 'text-ai' : 'text-indigo-300']">{{ msg.name }}</p>
+                        
+                        <div v-if="msg.fileUrl" class="mb-2">
+                            <img v-if="isImage(msg.fileType)" :src="msg.fileUrl" class="file-preview">
+                            <a v-else :href="msg.fileUrl" target="_blank" class="text-blue-400 underline flex items-center gap-1">
+                                <i class="fas fa-file-image"></i> ملف مرفق (اضغط للتكبير)
+                            </a>
+                        </div>
+                        <div v-if="msg.aiImageUrl" class="mb-2">
+                             <img :src="msg.aiImageUrl" class="ai-image-generated">
+                        </div>
+                        <p :class="{'font-mono text-sm': msg.isAi}">{{ msg.text }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <div v-if="fileToSend.file" class="p-3 bg-gray-900 border-t border-gray-700 flex items-center gap-3">
+                <div class="flex-1 flex items-center gap-2 p-2 bg-gray-800 rounded-lg border border-gray-700">
+                    <div class="relative w-16 h-16 bg-gray-700 rounded-md flex items-center justify-center overflow-hidden">
+                        <img :src="fileToSend.preview" class="w-full h-full object-cover">
+                        <button @click="clearFileToSend" class="absolute top-0 right-0 bg-red-500 rounded-bl-lg text-white w-5 h-5 flex items-center justify-center text-xs"><i class="fas fa-times"></i></button>
+                    </div>
+                    <span class="text-sm truncate">{{ fileToSend.file.name }}</span>
+                    <span v-if="uploadingFile" class="text-xs text-primary"><i class="fas fa-spinner fa-spin"></i> جاري الرفع...</span>
+                </div>
+                <input v-model="newMessage" type="text" :placeholder="aiMode ? 'إسأل AI Model عن الصورة...' : 'اضف وصفاً للصورة (اختياري)...'" class="flex-1 bg-gray-800 text-white rounded-full px-5 py-3 outline-none focus:ring-2 focus:ring-primary transition pointer-auto">
+                <button @click="aiMode ? sendMessageOrAi() : sendFileMessage()" :disabled="uploadingFile" :class="['w-12 h-12 rounded-full shadow-lg transition', aiMode ? 'bg-ai hover:bg-green-600 text-white' : 'bg-primary hover:bg-indigo-600 text-white']">
+                    <i v-if="uploadingFile" class="fas fa-spinner fa-spin text-xs"></i>
+                    <i v-else class="fas fa-paper-plane rtl:rotate-180"></i>
+                </button>
+            </div>
+            <div v-else-if="!isGuest" class="p-3 bg-dark border-t border-gray-700 flex items-center gap-2">
+                <button @click="aiMode = !aiMode" :class="['w-12 h-12 rounded-full shadow-lg transition flex items-center justify-center', aiMode ? 'bg-ai text-white hover:bg-green-600' : 'bg-gray-700 text-gray-400 hover:bg-gray-600']" title="تفعيل وضع الذكاء الاصطناعي">
+                    <i class="fas fa-robot"></i>
+                </button>
+
+                <label for="file-upload" class="w-12 h-12 rounded-full bg-gray-700 hover:bg-gray-600 text-white flex items-center justify-center shadow-lg transition cursor-pointer">
+                    <i class="fas fa-paperclip"></i>
+                    <input id="file-upload" type="file" accept="image/*,video/mp4,video/quicktime" class="hidden" @change="prepareFileToSend">
+                </label>
+                
+                <input v-model="newMessage" @keyup.enter="sendMessageOrAi" type="text" :placeholder="aiMode ? 'إسأل AI Model (GPT-5.1) أو اطلب صورة (أنشئ صورة لـ...)' : 'اكتب...'" class="flex-1 bg-gray-800 text-white rounded-full px-5 py-3 outline-none focus:ring-2 focus:ring-primary transition pointer-auto" :class="{'border-2 border-ai': aiMode}">
+                
+                <button @click="sendMessageOrAi" :disabled="!newMessage.trim() || aiIsTyping" :class="['w-12 h-12 rounded-full shadow-lg transition', aiMode ? 'bg-ai hover:bg-green-600 text-white' : 'bg-primary hover:bg-indigo-600 text-white']">
+                    <i v-if="aiIsTyping" class="fas fa-spinner fa-spin text-xs"></i>
+                    <i v-else class="fas fa-paper-plane rtl:rotate-180"></i>
+                </button>
+            </div>
+            <div v-else class="p-4 bg-dark border-t border-gray-700 text-center">
+                <button @click="view = 'profile'" class="text-primary text-sm font-bold underline">سجل الدخول للمشاركة</button>
+            </div>
+        </div>
+
+        <div v-if="mediaToView" class="fixed inset-0 z-[60] bg-black/90 flex items-center justify-center p-4" @click="mediaToView = null">
+            <div class="max-w-[90vw] max-h-[90vh] bg-dark rounded-lg shadow-2xl overflow-hidden relative" @click.stop>
+                 <button @click="mediaToView = null" class="absolute top-2 right-2 z-10 bg-red-500/80 text-white w-8 h-8 rounded-full hover:bg-red-600 transition">
+                    <i class="fas fa-times"></i>
+                </button>
+                <img v-if="isImage(mediaToView.type)" :src="mediaToView.url" class="max-w-full max-h-full object-contain">
+                <video v-else-if="isVideo(mediaToView.type)" :src="mediaToView.url" controls class="max-w-full max-h-full"></video>
+                <a v-else :href="mediaToView.url" target="_blank" class="p-8 block text-center text-xl text-primary underline">
+                     <i class="fas fa-download"></i> اضغط للتحميل
+                </a>
+            </div>
+        </div>
+
+        <div v-if="showAvatarModal" class="absolute inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" @click.self="showAvatarModal = false">
+            <div class="bg-panel w-full max-w-lg rounded-2xl p-4">
+                <div class="flex justify-between mb-4"><h3 class="font-bold">اختر صورة</h3><i @click="showAvatarModal = false" class="fas fa-times cursor-pointer"></i></div>
+                <input type="file" @change="handleFileUpload" class="mb-4 text-sm text-gray-400">
+                <div class="grid grid-cols-4 gap-3">
+                    <img v-for="img in presetAvatars" :src="img" @click="selectAvatar(img)" class="w-full aspect-square rounded cursor-pointer hover:border-2 border-primary">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // =================================================================================================
+        // 🚨🚨🚨 تحذير أمني خطير! هذا المفتاح سري ويجب ألا يتم تضمينه أبداً في كود يُعرض للعامة 🚨🚨🚨
+        // *************************************************************************************************
+        // استخدامك لهذا الكود يتحمل مسؤولية أي فواتير أو سرقة للمفتاح.
+        // *************************************************************************************************
+        const IMGBB_API_KEY = "f5028b5ae4cae4d44788326b3fc51e42"; 
+        const OPENAI_API_KEY = "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"; 
+        
+        const firebaseConfig = {
+            apiKey: "AIzaSyBaktAzZ8CBZMgUswnyHfOHDuIxRcqV9oo",
+            authDomain: "mychat-ffd4f.firebaseapp.com",
+            databaseURL: "https://mychat-ffd4f-default-rtdb.firebaseio.com",
+            projectId: "mychat-ffd4f",
+            storageBucket: "mychat-ffd4f.firebasestorage.app",
+            messagingSenderId: "611783046290",
+            appId: "1:611783046290:web:976cf7ec1d8a6c2126e24b"
+        };
+        // =================================================================================================
+
+        try { firebase.initializeApp(firebaseConfig); } catch(e) {}
+        const db = firebase.database();
+        const { createApp, ref, reactive, onMounted, nextTick } = Vue;
+
+        // =================================================================
+        // 🧠 AI CONTEXT & LOGIC 🧠
+        // =================================================================
+        const AI_AVATAR = 'https://img.icons8.com/color/48/000000/chatbot.png';
+        const AI_NAME = 'مساعد GPT-5.1';
+        const GPT_MODEL = "gpt-4o-mini"; // تم التخفيض لهذا النموذج لضمان سرعة الاستجابة والاستقرار
+        const VISION_MODEL = "gpt-4o"; 
+        const DALL_E_MODEL = "dall-e-3"; 
+
+        const getAIContextRef = (username) => db.ref(`ai_context/${username}`);
+
+        const updateAIContext = async (username, key, value) => {
+            await getAIContextRef(username).child(key).set(value);
+        };
+
+        const callOpenAI = async (messagesPayload, model, max_tokens, temperature) => {
+            const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${OPENAI_API_KEY}`
+                },
+                body: JSON.stringify({
+                    model: model,
+                    messages: messagesPayload,
+                    max_tokens: max_tokens,
+                    temperature: temperature
+                })
+            });
+            return response.json();
+        };
+
+        const generateImageWithDalle = async (prompt) => {
+            try {
+                const response = await fetch('https://api.openai.com/v1/images/generations', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${OPENAI_API_KEY}`
+                    },
+                    body: JSON.stringify({
+                        model: DALL_E_MODEL,
+                        prompt: prompt,
+                        n: 1,
+                        size: "1024x1024" 
+                    })
+                });
+                const data = await response.json();
+                if (data.data && data.data.length > 0) {
+                    return data.data[0].url;
+                } else if (data.error) {
+                     return `**🚫 خطأ في DALL-E:** ${data.error.message}.`;
+                }
+                return null;
+            } catch (error) {
+                console.error("DALL-E Fetch Error:", error);
+                return '**🚨 فشل الاتصال:** فشل في توليد الصورة.';
+            }
+        };
+
+        const generateAIResponse = async (userMessage, username, messages, uploadedFileBase64 = null) => {
+            const contextSnap = await getAIContextRef(username).get();
+            const context = contextSnap.val() || {};
+            const userName = context.name || 'المستخدم'; 
+
+            let messagesForGPT = [
+                { role: "system", content: `أنت مساعد ذكاء اصطناعي عربي متقدم (GPT-5.1) يعمل على منصة MyChat. اسم المستخدم الحالي الذي تتحدث معه هو: ${userName}. إذا طلب منك المستخدم أن تتذكر اسمه، يجب أن تطلب منه صراحة "تذكر اسمي هو: [الاسم]" حتى يتم حفظه في الذاكرة المحلية (Firebase). إذا طلب منك إنشاء صورة، يجب أن تبدأ الرد بـ "أنشئ صورة لـ:" أو "إنشاء صورة لـ:".` },
+            ];
+
+            const recentMessages = messages.slice(-5).filter(msg => !msg.isAi).map(msg => ({
+                role: "user",
+                content: `${msg.name}: ${msg.text}` 
+            }));
+            messagesForGPT = messagesForGPT.concat(recentMessages);
+
+            // تحديد المحتوى المراد إرساله (نص فقط أو نص + صورة)
+            const userContent = [];
+            if (uploadedFileBase64) {
+                userContent.push({ type: "image_url", image_url: { url: uploadedFileBase64, detail: "high" } });
+            }
+            userContent.push({ type: "text", text: userMessage });
+            messagesForGPT.push({ role: "user", content: userContent });
+
+
+            // 1. فحص طلب إنشاء صورة
+            if ((userMessage.includes("أنشئ صورة لـ:") || userMessage.includes("إنشاء صورة لـ:")) && !uploadedFileBase64) {
+                const imagePrompt = userMessage.replace(/أنشئ صورة لـ:|إنشاء صورة لـ:/, '').trim();
+                const imageUrl = await generateImageWithDalle(imagePrompt);
+                if (imageUrl && !imageUrl.startsWith('**🚫')) {
+                    return { text: `لقد قمت بإنشاء هذه الصورة لك بناءً على طلبك: "${imagePrompt}"`, imageUrl: imageUrl };
+                } else {
+                    return { text: imageUrl, imageUrl: null };
+                }
+            }
+
+
+            // 2. إرسال الطلب إلى نموذج المحادثة/الرؤية
+            let modelToUse = GPT_MODEL;
+            if (uploadedFileBase64) {
+                modelToUse = VISION_MODEL; // نموذج الرؤية
+            }
+            
+            const data = await callOpenAI(messagesForGPT, modelToUse, 800, 0.7);
+
+            if (data.choices && data.choices.length > 0) {
+                const aiText = data.choices[0].message.content.trim();
+                
+                const nameMatch = aiText.match(/اسمك هو:\s*([a-z\u0600-\u06ff]+)/i);
+                if (nameMatch && nameMatch[1]) {
+                    const newName = nameMatch[1].trim();
+                    await updateAIContext(username, 'name', newName);
+                }
+
+                return { text: aiText, imageUrl: null };
+
+            } else if (data.error) {
+                return { text: `**🚫 خطأ في OpenAI:** ${data.error.message}.`, imageUrl: null };
+            } else {
+                return { text: 'عذراً، لم أتلق رداً صالحاً من الذكاء الاصطناعي.', imageUrl: null };
+            }
+        };
+
+        // =================================================================
+
+        createApp({
+            setup() {
+                const view = ref('profile');
+                const isConnected = ref(false);
+                const showAvatarModal = ref(false);
+                const isGuest = ref(false);
+                const aiMode = ref(false);
+                const mediaToView = ref(null);
+                const aiIsTyping = ref(false); 
+                const appLoaded = ref(false); // الحالة الجديدة للتحميل
+
+                
+                const user = reactive({ name: '', username: '', avatar: '' });
+                const roomInput = reactive({ name: '', password: '' });
+                const activeRoom = reactive({ name: '', id: '' });
+                
+                const usernameStatus = ref('');
+                const suggestedUser = ref('');
+                const messages = ref([]);
+                const newMessage = ref('');
+                
+                const fileToSend = reactive({ file: null, preview: '', type: '', base64: null });
+                const uploadingFile = ref(false);
+                
+                let dbRef = null;
+
+                const presetAvatars = [
+                    'https://i.pinimg.com/736x/f4/56/d1/f456d11944c020cd196d4b78c8ef3692.jpg',
+                    'https://i.pinimg.com/736x/e7/2b/1a/e72b1a4d72d0e6385da67ffa00e37de6.jpg',
+                    'https://i.pinimg.com/736x/95/43/8a/95438a3e74d49e798444146747230537.jpg',
+                    'https://i.pinimg.com/736x/00/e6/41/00e641f7375094ef429622b785e9416c.jpg'
+                ];
+
+                onMounted(() => {
+                    // Start Firebase checks immediately
+                    db.ref(".info/connected").on("value", s => isConnected.value = s.val());
+
+                    const savedUser = localStorage.getItem('mychat_user_v11');
+                    if(savedUser) {
+                        Object.assign(user, JSON.parse(savedUser));
+                        usernameStatus.value = 'available';
+                        view.value = 'lobby';
+                    }
+                    
+                    const params = new URLSearchParams(window.location.search);
+                    if(params.has('room')) {
+                        roomInput.name = params.get('room');
+                        if(params.has('pass')) roomInput.password = params.get('pass');
+                        if(savedUser) joinRoom();
+                        else {
+                            isGuest.value = true;
+                            user.username = 'Guest_' + Math.floor(Math.random()*1000);
+                            view.value = 'chat';
+                            loadChat(roomInput.name, roomInput.password);
+                        }
+                    }
+                    
+                    // Set appLoaded to true once mounting is complete
+                    appLoaded.value = true;
+                });
+
+                const checkUsername = async () => {
+                    if(!user.username) return;
+                    usernameStatus.value = 'checking';
+                    const timeout = new Promise((_, reject) => setTimeout(() => reject("Timeout"), 3000));
+                    try {
+                        const check = db.ref('users/' + user.username).get();
+                        const snap = await Promise.race([check, timeout]);
+                        if(snap.exists() && (!localStorage.getItem('mychat_user_v11') || JSON.parse(localStorage.getItem('mychat_user_v11')).username !== user.username)) {
+                            usernameStatus.value = 'taken';
+                            suggestedUser.value = user.username + Math.floor(Math.random() * 100);
+                        } else {
+                            usernameStatus.value = 'available';
+                        }
+                    } catch (error) {
+                        console.error("Connection Error:", error);
+                        usernameStatus.value = 'available'; 
+                    }
+                };
+
+                const saveProfile = () => {
+                    if(usernameStatus.value !== 'available' || !user.name || !user.avatar) return;
+                    db.ref('users/' + user.username).set({ name: user.name, avatar: user.avatar }).catch(()=>{});
+                    localStorage.setItem('mychat_user_v11', JSON.stringify(user));
+                    view.value = 'lobby';
+                };
+
+                const joinRoom = () => {
+                    if(!roomInput.name) return;
+                    isGuest.value = false;
+                    loadChat(roomInput.name, roomInput.password);
+                };
+
+                const loadChat = (rName, rPass) => {
+                    const roomId = (rName + '_' + (rPass || 'nopass')).replace(/[.#$/[\]]/g, '-');
+                    activeRoom.name = rName;
+                    activeRoom.id = roomId;
+                    view.value = 'chat';
+                    
+                    dbRef = db.ref('rooms/' + roomId + '/messages');
+                    messages.value = [];
+                    dbRef.limitToLast(50).on('child_added', (snap) => {
+                        messages.value.push(snap.val());
+                        nextTick(() => document.getElementById('chat-box').scrollTo(0, 99999));
+                    });
+                };
+                
+                const sendMessageOrAi = async () => {
+                    if((!newMessage.value.trim() && !fileToSend.file) || isGuest.value) return;
+
+                    const hasFile = !!fileToSend.file;
+                    const isAiRequest = aiMode.value;
+
+                    // 1. إرسال رسالة المستخدم للدردشة (أو تجهيزها للـ AI)
+                    const userMsg = newMessage.value;
+                    let fileBase64 = null;
+
+                    if (!isAiRequest && !hasFile) {
+                        // وضع الدردشة العادية (نص فقط)
+                        const msg = { username: user.username, name: user.name, avatar: user.avatar, text: userMsg, timestamp: Date.now() };
+                        dbRef.push(msg).catch(() => alert("فشل الإرسال!"));
+                        newMessage.value = '';
+                        return;
+                    }
+
+                    // 2. وضع الـ AI: رفع الصورة أولاً (إذا وجدت)
+                    if (isAiRequest && hasFile) {
+                        fileBase64 = fileToSend.base64;
+                    }
+                    
+                    // 3. عرض رسالة المستخدم في الشات أولاً
+                    messages.value.push({
+                        username: user.username, name: user.name, avatar: user.avatar, 
+                        text: userMsg, timestamp: Date.now(), 
+                        fileUrl: hasFile ? fileToSend.preview : null, // عرض المعاينة في الشات
+                        fileType: hasFile ? fileToSend.type : null,
+                        isAi: false
+                    });
+                    nextTick(() => document.getElementById('chat-box').scrollTo(0, 99999));
+                    
+                    // 4. معالجة الـ AI
+                    if (isAiRequest) {
+                        aiIsTyping.value = true;
+
+                        const aiResult = await generateAIResponse(userMsg, user.username, messages.value, fileBase64);
+                        aiIsTyping.value = false;
+
+                        // إرسال رد الـ AI
+                        messages.value.push({
+                            username: 'AI', name: AI_NAME, avatar: AI_AVATAR,
+                            text: aiResult.text, timestamp: Date.now(), isAi: true,
+                            aiImageUrl: aiResult.imageUrl 
+                        });
+                        nextTick(() => document.getElementById('chat-box').scrollTo(0, 99999));
+
+                        aiMode.value = false; // إيقاف وضع الـ AI تلقائيًا
+
+                        if (hasFile) clearFileToSend();
+                        newMessage.value = '';
+                        return;
+                    }
+
+                    // 5. وضع الرفع العادي (ImgBB)
+                    if (hasFile && !isAiRequest) {
+                        await sendFileMessage();
+                        return;
+                    }
+                };
+
+                // [الرفع المباشر على ImgBB]
+                const prepareFileToSend = (event) => {
+                    const file = event.target.files[0];
+                    if (!file || !(file.type.startsWith('image/') || file.type.startsWith('video/'))) return alert("هذا الإصدار يدعم رفع الصور والفيديوهات.");
+
+                    if (file.size > 10 * 1024 * 1024) { 
+                        alert("حجم الملف كبير جداً (الحد الأقصى 10MB) وقد يتم رفضه من الخدمة المجانية.");
+                        return;
+                    }
+
+                    fileToSend.file = file;
+                    fileToSend.type = file.type;
+                    
+                    const reader = new FileReader();
+                    reader.onload = (e) => { 
+                        fileToSend.preview = e.target.result;
+                        fileToSend.base64 = e.target.result; // حفظ Base64 للـ AI 
+                    };
+                    reader.readAsDataURL(file);
+                };
+
+                const sendFileMessage = async () => {
+                    if (!fileToSend.file || isGuest.value) return;
+                    uploadingFile.value = true;
+                    
+                    const base64File = fileToSend.base64.split(',')[1];
+
+                    try {
+                        const formData = new FormData();
+                        formData.append('image', base64File);
+                        
+                        const response = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
+                            method: 'POST',
+                            body: formData
+                        });
+
+                        const result = await response.json();
+
+                        if (result.success) {
+                            const fileUrl = result.data.url;
+                            const msg = {
+                                username: user.username, name: user.name, avatar: user.avatar,
+                                text: newMessage.value, timestamp: Date.now(), fileUrl: fileUrl, fileType: fileToSend.type
+                            };
+                            dbRef.push(msg).catch(() => alert("فشل الإرسال!"));
+                        } else {
+                            alert("فشل رفع الملف: الخدمة المجانية رفضت الملف (قد يكون فيديو أو حجم كبير).");
+                        }
+                    } catch (e) {
+                        alert("خطأ في الاتصال الخارجي. تأكد من مفتاح ImgBB!");
+                    }
+                    
+                    clearFileToSend();
+                    uploadingFile.value = false;
+                };
+
+                const viewMedia = (url, type) => {
+                    if (url) {
+                        mediaToView.value = { url, type };
+                    }
+                };
+
+                const clearFileToSend = () => {
+                    fileToSend.file = null;
+                    fileToSend.preview = null;
+                    fileToSend.type = null;
+                    fileToSend.base64 = null;
+                    newMessage.value = '';
+                };
+
+                const isImage = (type) => type && type.startsWith('image/');
+                const isVideo = (type) => type && type.startsWith('video/');
+
+                const selectAvatar = (url) => { user.avatar = url; showAvatarModal.value = false; };
+                const handleFileUpload = (e) => {
+                    const f = e.target.files[0];
+                    if(!f) return;
+                    const r = new FileReader();
+                    r.onload = (res) => user.avatar = res.target.result;
+                    r.readAsDataURL(f);
+                };
+
+                const copyLink = () => {
+                    const url = `${window.location.origin}${window.location.pathname}?room=${roomInput.name}&pass=${roomInput.password || ''}`;
+                    navigator.clipboard.writeText(url);
+                    alert("تم نسخ رابط الدعوة!");
+                };
+
+                const leaveRoom = () => {
+                    view.value = 'lobby';
+                    messages.value = [];
+                    if(dbRef) dbRef.off();
+                    window.history.pushState({}, document.title, window.location.pathname);
+                };
+
+                return { 
+                    view, isConnected, user, roomInput, activeRoom, isGuest, aiMode, mediaToView, appLoaded,
+                    usernameStatus, suggestedUser, messages, newMessage, showAvatarModal, presetAvatars,
+                    fileToSend, uploadingFile, aiIsTyping,
+                    checkUsername, saveProfile, joinRoom, sendMessageOrAi, copyLink, leaveRoom, handleFileUpload,
+                    selectAvatar, prepareFileToSend, sendFileMessage, clearFileToSend, isImage, isVideo, viewMedia
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
